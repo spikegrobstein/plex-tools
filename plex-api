@@ -1,0 +1,72 @@
+#! /usr/bin/env bash
+
+# uses APIs as documented on
+# https://plex-docs.vercel.app/docs/plex
+
+set -euo pipefail
+
+# this defines '$product' and $client_id
+. config.bash
+
+token="$( cat "./token" )"
+
+get-user() {
+  curl \
+    -XGET \
+    --silent \
+    https://plex.tv/api/v2/user \
+    --header "accept: application/json" \
+    -d "X-Plex-Product=$product" \
+    -d "X-Plex-Client-Identifier=$client_id" \
+    -d "X-Plex-Token=$token"
+}
+
+get-resources() {
+  curl \
+    -XGET \
+    --silent \
+    https://plex.tv/api/v2/resources \
+    --header "accept: application/json" \
+    -d "X-Plex-Product=$product" \
+    -d "X-Plex-Client-Identifier=$client_id" \
+    -d "X-Plex-Token=$token"
+}
+
+get-media-servers() {
+  get-resources \
+    | jq '.[] | select(.product == "Plex Media Server")'
+}
+
+list-media-servers() {
+  get-media-servers \
+    | jq '"\(.sourceTitle)/\(.name)"'
+}
+
+get-libraries() {
+  local server_json="$( cat )"
+
+  #echo "json: $server_json"
+
+  local access_token
+  access_token="$( jq --raw-output .accessToken <<< "$server_json" )"
+
+  echo "token: $access_token"
+
+  local uri
+  uri="$( jq --raw-output '[.connections[] | select(.local == false)][-1].uri' <<< "$server_json" )"
+
+  local url
+  url="$uri/library/sections"
+
+  echo "Getting $url"
+  curl \
+    --verbose \
+    -L \
+    --silent \
+    --show-error \
+    "$url" \
+    --header 'accept: application/json' \
+    --header "X-Plex-Token: $access_token"
+}
+
+"$@"

@@ -1,0 +1,84 @@
+#! /usr/bin/env bash
+
+# do token dance as per
+# https://forums.plex.tv/t/authenticating-with-plex/609370
+
+set -euo pipefail
+
+. config.bash
+
+CALLBACK_PORT=32666
+
+warn() {
+  printf "%s\n" "$@" >&2
+}
+
+# curl -XPOST https://plex.tv/api/v2/pins'?strong=true&X-Plex-Product=medialist&X-Plex-Client-Identifier=abcde12345' --header 'accept: application/json'
+
+. config.bash
+
+get_pin() {
+  curl -XPOST \
+    --silent \
+    --header 'accept: application/json' \
+    "https://plex.tv/api/v2/pins?strong=true&X-Plex-Product=${product}&X-Plex-Client-Identifier=${client_id}"
+}
+
+auth_url() {
+  local code="$1"
+
+  echo "https://app.plex.tv/auth#?clientID=${client_id}&code=${code}&context[device][product]=${product}&contet[device][environment]=bundled&context[device][layout]=desktop&context[device][platform]=Web&forwardUrl=http:%2f%2flocalhost:$CALLBACK_PORT/callback"
+}
+
+start_callback_server() {
+  nc \
+    --listen \
+    --local-port "$CALLBACK_PORT" \
+    --exec "./response.bash" \
+    127.0.0.1
+}
+
+handle_callback() {
+  echo "waiting for callback..."
+}
+
+check_pin() {
+  local pin_id="$1"
+  local pin_code="$2"
+
+  curl \
+    --silent \
+    --show-error \
+    -XGET \
+    "https://plex.tv/api/v2/pins/$pin_id" \
+    --header 'accept: application/json' \
+    --data "code=$pin_code" \
+    --data "X-Plex-Client-Identifier=$client_id"
+}
+
+response_json="$( get_pin )"
+
+jq . <<< "$response_json"
+
+pin_id="$( jq --raw-output ".id" <<< "$response_json" )"
+code="$( jq --raw-output ".code" <<< "$response_json" )"
+
+warn "got code: $code"
+
+start_callback_server &
+
+xdg-open "$( auth_url "$code" )"
+
+wait
+
+# now get the token
+
+resp="$( check_pin "$pin_id" "$code" )"
+
+auth_token="$( jq --raw-output .authToken <<< "$resp" )"
+
+echo "$auth_token" > token
+echo "Got token: $auth_token"
+
+#token="$( cat ./token )"
+#echo "Done! Got token: $token"
