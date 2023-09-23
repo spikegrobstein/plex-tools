@@ -34,3 +34,12 @@ In the `plex-api` tool, it will take whatever arguments you type and run them, s
 ## other notes
 
 There's still a lot of work to be done here, and there's some limitations to what's been implemented. for example, some plex servers that get listed may not respond or may provide an empty response. this is probably because of a misconfiguration on the server's side. There's another method to get media info from other servers, but that's not part of this, yet.
+
+## credit
+
+Spike Grobstein wrote the code in this repository, but the structure and strategy for how it was built was collected from external sources.
+
+Special thanks to the following pages/sites for providing said information:
+
+* <https://plex-docs.vercel.app/docs/plex>
+* <https://forums.plex.tv/t/authenticating-with-plex/609370>
