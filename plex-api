@@ -48,11 +48,15 @@ get-server() {
     | jq --arg name "$name" 'select(.name == $name)'
 }
 
-list-media-servers() {
+media-server-names() {
   get-media-servers \
-    | jq '"\(.sourceTitle)/\(.name)"'
+    | jq --raw-output '.name'
 }
 
+# take the input from get-server to list the
+# libraries for this server
+# example:
+#   ./plex-api get-server 'luna' | ./plex-api get-libraries
 get-libraries() {
   local server_json="$( cat )"
 
@@ -77,6 +81,16 @@ get-libraries() {
     "$url" \
     --header 'accept: application/json' \
     --header "X-Plex-Token: $access_token"
+}
+
+# like get-libraries, but filter out just the movie libraries
+# (ie: skip TV shows and pictures and music)
+#
+# example:
+#   ./plex-api get-server 'luna' | ./plex-api get-movie-libraries
+get-movie-libraries() {
+  get-libraries \
+    | jq '[.MediaContainer.Directory[] | select(.type == "movie")]'
 }
 
 "$@"
