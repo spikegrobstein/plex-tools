@@ -2,6 +2,13 @@
 
 this is just a quick and dirty thing to start making API calls to plex through the commandline.
 
+## requirements
+
+* GNU `nc` -- this is using the `--exec`, `--local-port` and `--listen` options, which may differ on other platforms
+* `jq` -- used to parse JSON responses
+* `bash` -- probably any version will work, but was tested on 5.x
+* `curl`
+
 ## quickstart
 
 first, create a `config.bash` file that assigns 2 variables:
