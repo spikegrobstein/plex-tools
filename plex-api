@@ -38,7 +38,7 @@ get-resources() {
 
 get-media-servers() {
   get-resources \
-    | jq '.[] | select(.product == "Plex Media Server")'
+    | jq '.[] | select(.product == "Plex Media Server" and .presence == true)'
 }
 
 get-server() {
