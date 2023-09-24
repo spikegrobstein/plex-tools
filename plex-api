@@ -11,7 +11,7 @@ set -euo pipefail
 token="$( cat "./token" )"
 
 api-get() {
-  local uri="$1"
+  local uri="$1"; shift
 
   curl \
     -XGET \
@@ -21,7 +21,8 @@ api-get() {
     --header "accept: application/json" \
     --data "X-Plex-Product=$product" \
     --data "X-Plex-Client-Identifier=$client_id" \
-    --data "X-Plex-Token=$token"
+    --data "X-Plex-Token=$token" \
+    "$@"
 }
 
 get-user() {
@@ -29,12 +30,22 @@ get-user() {
 }
 
 get-resources() {
-  api-get /resources
+  api-get /resources \
+    --data 'includeRelay=0' \
+    --data 'includeHttps=1' \
+    --data 'X-Plex-Features=indirect-media'
 }
 
 get-media-servers() {
   get-resources \
     | jq '.[] | select(.product == "Plex Media Server")'
+}
+
+get-server() {
+  local name="$1"
+
+  get-media-servers \
+    | jq --arg name "$name" 'select(.name == $name)'
 }
 
 list-media-servers() {
@@ -50,7 +61,7 @@ get-libraries() {
   local access_token
   access_token="$( jq --raw-output .accessToken <<< "$server_json" )"
 
-  echo "token: $access_token"
+  echo "token: $access_token" >&2
 
   local uri
   uri="$( jq --raw-output '[.connections[] | select(.local == false)][-1].uri' <<< "$server_json" )"
@@ -58,9 +69,8 @@ get-libraries() {
   local url
   url="$uri/library/sections"
 
-  echo "Getting $url"
+  echo "Getting $url" >&2
   curl \
-    --verbose \
     -L \
     --silent \
     --show-error \
