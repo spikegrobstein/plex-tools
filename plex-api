@@ -10,26 +10,26 @@ set -euo pipefail
 
 token="$( cat "./token" )"
 
-get-user() {
+api-get() {
+  local uri="$1"
+
   curl \
     -XGET \
     --silent \
-    https://plex.tv/api/v2/user \
+    --show-error \
+    https://plex.tv/api/v2"$uri" \
     --header "accept: application/json" \
-    -d "X-Plex-Product=$product" \
-    -d "X-Plex-Client-Identifier=$client_id" \
-    -d "X-Plex-Token=$token"
+    --data "X-Plex-Product=$product" \
+    --data "X-Plex-Client-Identifier=$client_id" \
+    --data "X-Plex-Token=$token"
+}
+
+get-user() {
+  api-get /user
 }
 
 get-resources() {
-  curl \
-    -XGET \
-    --silent \
-    https://plex.tv/api/v2/resources \
-    --header "accept: application/json" \
-    -d "X-Plex-Product=$product" \
-    -d "X-Plex-Client-Identifier=$client_id" \
-    -d "X-Plex-Token=$token"
+  api-get /resources
 }
 
 get-media-servers() {
