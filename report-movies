@@ -1,0 +1,121 @@
+#! /usr/bin/env bash
+
+## generate a sqlite database of everyone's media who shares with you.
+## this only stores "movie" type media.
+
+set -euo pipefail
+
+# iterate over all media severs
+# for each movie library, collect all of the films
+# we will store:
+# * title
+# * year
+# * library owner
+# * unique id for film
+#
+# each time you run this, it will delete the DATA_DIR and then re-create everything
+
+
+DB_NAME="movies.sqlite"
+DATA_DIR="report-data"
+
+info() {
+  printf "[INFO] %s\n" "$@" >&2
+}
+
+warn() {
+  printf "[WARN] %s\n" "$@" >&2
+}
+
+init() {
+  rm -rf "$DATA_DIR"
+  mkdir -p "$DATA_DIR"
+
+  init_db
+}
+
+init_db() {
+  rm -rf "$DB_NAME"
+  _create_table_sql \
+    | sqlite3 "$DATA_DIR/$DB_NAME"
+}
+
+exec_sql() {
+  local query="$1"
+
+  sqlite3 "$DATA_DIR/$DB_NAME" <<< "$query"
+}
+
+_create_table_sql() {
+  echo "create table if not exists movies ( title string, year int, owner string, id string );"
+}
+
+ingest-server() {
+  local server_name="$1"
+  local server_file="$DATA_DIR/${server_name}.json"
+  local token_file="$DATA_DIR/${server_name}.token"
+
+  info "Ingesting server: $server_name"
+
+  ./plex-api get-server "$server_name" \
+    > "$server_file"
+
+
+  jq --raw-output .accessToken "$server_file" > "$token_file"
+
+  local token
+  token="$( cat "$token_file" )"
+
+  local movie_libraries
+  if ! movie_libraries="$( cat "$server_file" | ./plex-api get-movie-libraries )"; then
+    warn "Failed to get server data for $server_name"
+    rm -rf "$server_file"
+    return 0
+  fi
+
+  local library_ids
+  local id
+  library_ids="$( jq --raw-output '.[].key' <<< "$movie_libraries" )"
+
+  if [[ -z "$library_ids" ]]; then
+    warn "No libraries for $server_name"
+    return
+  fi
+
+  local uri
+  uri="$( jq --raw-output '[.connections[] | select(.local == false)][-1].uri' < "$server_file" )"
+
+  mapfile -t library_ids <<< "$library_ids"
+  info "$server_name has ${#library_ids[@]} movie libraries"
+  for id in "${library_ids[@]}"; do
+    # get the movies out of this thing
+    
+    curl \
+      --silent \
+      --show-error \
+      "$uri/library/sections/$id/all" \
+      --header 'accept: application/json' \
+      --header "X-Plex-Token: $token" \
+      | jq \
+        --raw-output \
+        --arg username "$server_name" \
+        --from-file ./movie_to_sql.jq \
+      | sqlite3 "$DATA_DIR/$DB_NAME"
+  done
+}
+
+init
+
+servers=$( ./plex-api media-server-names )
+if [[ -z "$servers" ]]; then
+  servers=()
+else
+  mapfile -t servers <<< "$servers"
+fi
+
+info "Got back ${#servers[@]}"
+
+for server in "${servers[@]}"; do
+  ingest-server "$server"
+done
+
